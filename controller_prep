@@ -1,0 +1,155 @@
+#!/bin/bash
+#This script Contains all the functions to install and configure openstack
+
+set -x
+
+#Including Configuration File
+. config
+
+#Adding ipaddress to the hosts file
+networkPart(){
+sed -i "/`hostname`/ i $ipaddress controller" /etc/hosts
+
+}
+
+#Instal and confiure mysql server
+mysqlSetup(){
+	export DEBIAN_FRONTEND=noninteractive
+	apt-get install -q mariadb-server python-mysqldb -y
+	cp /etc/mysql/my.cnf /etc/mysql/my.cnf.bkp
+	sed -i "s/127.0.0.1/  $ipaddress /" /etc/mysql/my.cnf 
+	# change storage engine to innodb
+	sed -i '/tmpdir/ i default-storage-engine = innodb \
+                innodb_file_per_table \
+                collation-server = utf8_general_ci\
+                init-connect = "'"SET NAMES utf8"'" \
+		 character-set-server = utf8 ' /etc/mysql/my.cnf 
+	#Restart Server
+	
+	service mysql restart
+	mysqladmin -u root password $MYSQL_PASS
+	
+}
+
+#Add the Openstack repository to the apt-get repos
+repository(){
+apt-get update
+apt-get install python-software-properties -y
+echo "deb http://ubuntu-cloud.archive.canonical.com/ubuntu trusty-updates/juno main" > /etc/apt/sources.list.d/ubuntu-cloud-archive-juno-trusty.list
+apt-get install ubuntu-cloud-keyring
+apt-get update
+}
+
+
+# Install rabbitMQ server
+rabbitMQ(){
+apt-get install rabbitmq-server -y
+rabbitmqctl change_password guest $RABBIT_PASS
+}
+
+
+#Create database
+db_C(){
+mysql -u $MYSQL_USER -p$MYSQL_PASS << EODs
+CREATE DATABASE $service;
+GRANT ALL PRIVILEGES ON $service.* TO '$service'@'localhost' \
+  IDENTIFIED BY '$SERVICE_PASS';
+GRANT ALL PRIVILEGES ON $service.* TO '$service'@'%' \
+  IDENTIFIED BY '$SERVICE_PASS';
+EODs
+}
+
+#Install and configure keystone
+keystone(){
+SERVICE_PASS="$KEYSTONE_PASS"
+	db_C
+	apt-get install keystone python-keystoneclient -y
+	
+	cp /etc/keystone/keystone.conf /etc/keystone/keystone.conf.old
+	sed -i "s/#admin_token/admin_token=$ADMINTOKEN /g" /etc/keystone/keystone.conf 
+	sed -i "s/connection=sqlite:\/\/\/\/var\/lib\/keystone\/keystone.db/connection=mysql:\/\/keystone:keystone@controller\/keystone /g" /etc/keystone/keystone.conf
+	sed -i 's/#verbose=false/verbose=true /g' /etc/keystone/keystone.conf
+	keystone-manage db_sync
+	rm -f /var/lib/keystone/keystone.db
+	service keystone restart
+}
+
+#Install and configure glance
+glance(){
+SERVICE_PASS="$GLANCE_PASS"
+	db_C
+}
+
+#Install and configure nova
+nova(){
+SERVICE_PASS="$NOVA_PASS"
+	db_C
+}
+
+#Install and configure neutron
+neutron(){
+SERVICE_PASS="$NEUTRON_PASS"
+	db_C
+}
+
+#Install and configure cinder
+cinder(){
+SERVICE_PASS="$CINDER_PASS"
+	db_C
+
+}
+
+#Install and configure swift
+swift(){
+SERVICE_PASS="$SWIFT_PASS"
+	db_C
+}
+
+#Install and configure heat
+heat(){
+SERVICE_PASS="$HEAT_PASS"
+	db_C
+}
+
+#Install and configure Ceilometer
+ceilometer(){
+SERVICE_PASS="$CEILOMETER_PASS"	db_C
+
+}
+
+#ENV Varibles to do openstack operation
+env_variables(){
+export OS_SERVICE_TOKEN=$ADMINTOKEN
+export OS_SERVICE_ENDPOINT=http://$hostname:35357/v2.0
+}
+
+#Creating tenant and role operations
+tenantCreate(){
+keystone tenant-create --name $tenant_Name --description "$tenant_Name Tenant"
+keystone user-create --name $tenant_User --pass $tenant_Pass --email $email
+}
+
+roleCreate(){
+keystone role-create --name $role_Name
+#Add the admin tenant and user to the admin role
+keystone user-role-add --tenant $tenant_Name --user $tenant_User --role $role_Name
+}
+
+memberRole(){
+keystone role-create --name _member_
+keystone user-role-add --tenant admin --user admin --role _member_
+}
+
+demoTenant(){
+keystone tenant-create --name demo --description "Demo Tenant"
+	keystone user-create --name demo --pass demo --email demo@example
+	keystone user-role-add --tenant demo --user demo --role _member_
+	keystone tenant-create --name service --description "Service Tenant"
+}
+
+
+
+
+
+
+

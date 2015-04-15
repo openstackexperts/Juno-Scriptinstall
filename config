@@ -1,0 +1,31 @@
+#Assigning Static IP to the interface
+
+#[DEFAULT] 
+ipaddress=192.168.1.5
+hostname=controller
+domainname=controller.local
+ntpserver=controller.local
+RABBIT_PASS=guest
+MYSQL_USER=root
+MYSQL_PASS=toor
+
+#[keystone]
+KEYSTONE_USER=keystone
+KEYSTONE_PASS=keystone
+ADMINTOKEN=ADMIN
+
+#[Tenant details]
+tenant_Name=
+tenant_User=
+tenant_Pass=
+email=
+
+#[role details]
+role_Name=
+
+
+
+
+
+
+
